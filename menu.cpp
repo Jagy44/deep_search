@@ -9,6 +9,7 @@ int main(){
 		case 1{
 			cout << "izbrali ste moznost 1";
 		}
+	//Dokoncaj switch case
 	
-
+	return 0;
 }
