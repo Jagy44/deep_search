@@ -1,5 +1,8 @@
-1. How to use application:
+1. DESCRIPTION OF APPLICATION:
  - Application is built from 3 parts. Main.cpp, out.cpp and menu.cpp,
  - Main.cpp has counter which writes out "counter = " and number, depending on array length,
  - Out.cpp has code which writes out the words that are in array,
  - Menu.cpp has code for menu which user can use.
+
+2. HOW TO USE APPLICATION
+ - Simplyy go in terminal and use sudo ./--name_of_cpp_file--
