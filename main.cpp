@@ -2,6 +2,7 @@
 #include <vector>
 using namespace std;
 
+// V main se presteje countr in izpise.
 int main(){
 	int counter;
 	vector<int> Array = [1, 2, 3, 4, 5];
