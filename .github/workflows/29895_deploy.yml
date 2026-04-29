@@ -1,0 +1,42 @@
+# Ime workflowa, ki bo poskrbel za objavo Docker slike na DockerHub.
+name: 29895_deploy
+
+# Ta workflow se zažene šele takrat, ko se workflow 29895_test zaključi.
+on:
+  workflow_run:
+    workflows:
+      - 29895_test
+    types:
+      - completed
+
+jobs:
+  # Job zgradi Docker image in ga objavi na DockerHub.
+  docker-build-and-push:
+    # Deploy se izvede samo, če je bil testni workflow uspešen.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    # Uporabimo self-hosted runner na Linux VM.
+    runs-on: self-hosted
+
+    steps:
+      # Prenese kodo iz repozitorija.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Prijava v DockerHub z GitHub Secrets.
+      # Gesla oziroma tokena ne pišemo direktno v datoteko.
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Zgradi Docker image iz Dockerfile datoteke.
+      - name: Build Docker image
+        run: |
+          docker build -t anzij/vaja2-project:latest .
+
+      # Potisne Docker image na DockerHub repozitorij.
+      - name: Push Docker image to DockerHub
+        run: |
+          docker push anzij/vaja2-project:latest
