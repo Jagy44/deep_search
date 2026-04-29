@@ -1,0 +1,138 @@
+# Ime workflowa, ki se prikaže v zavihku Actions na GitHubu.
+name: 29895_test
+
+# Workflow se zažene ob vsakem pushu na vejo main.
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Prvi job preveri osnovno strukturo projekta in testira C++ datoteke.
+  repository-tests:
+    # Uporabimo self-hosted runner, ki teče na našem Linux VM.
+    runs-on: self-hosted
+
+    # Matrix je zahteva naloge. Tukaj z njim preverimo več pomembnih datotek.
+    strategy:
+      matrix:
+        test-file:
+          - name: README.md
+            type: text
+          - name: main.cpp
+            type: cpp
+          - name: Code.cpp
+            type: cpp
+
+    steps:
+      # Prenese trenutno verzijo kode iz GitHub repozitorija na runner.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Ustvari prazno datoteko napaka.txt.
+      # Če kateri test pade, se razlog zapiše v to datoteko.
+      - name: Prepare napaka.txt
+        run: |
+          : > napaka.txt
+
+      # Preveri, ali zahtevana datoteka iz matrixa obstaja.
+      - name: Check that required file exists
+        run: |
+          if [ ! -f "${{ matrix.test-file.name }}" ]; then
+            echo "Napaka: Datoteka ${{ matrix.test-file.name }} ne obstaja." >> napaka.txt
+            exit 1
+          fi
+
+      # Preveri, ali zahtevana datoteka ni prazna.
+      - name: Check that required file is not empty
+        run: |
+          if [ ! -s "${{ matrix.test-file.name }}" ]; then
+            echo "Napaka: Datoteka ${{ matrix.test-file.name }} je prazna." >> napaka.txt
+            exit 1
+          fi
+
+      # Pri C++ datotekah preverimo, ali vsebujejo osnovno C++ vsebino.
+      # To je primerno za ta repozitorij, ker datoteke niso nujno del enega programa.
+      - name: Check basic C++ content
+        if: matrix.test-file.type == 'cpp'
+        run: |
+          if ! grep -Eq '#include|cout|int main|using namespace std|std::' "${{ matrix.test-file.name }}"; then
+            echo "Napaka: Datoteka ${{ matrix.test-file.name }} ne vsebuje pričakovane C++ vsebine." >> napaka.txt
+            exit 1
+          fi
+
+      # Prevedemo samo main.cpp, ker je to glavna datoteka projekta.
+      # Ne prevajamo vseh .cpp datotek skupaj, ker so nekatere samo vaje ali izpisi.
+      - name: Compile main.cpp
+        if: matrix.test-file.name == 'main.cpp'
+        run: |
+          g++ -std=c++17 -Wall -Wextra -o app main.cpp 2> compile_error.txt || {
+            echo "Napaka: main.cpp se ne prevede." >> napaka.txt
+            cat compile_error.txt >> napaka.txt
+            exit 1
+          }
+
+      # Zaženemo preveden program in njegov izpis shranimo v program_output.txt.
+      - name: Run compiled program
+        if: matrix.test-file.name == 'main.cpp'
+        run: |
+          ./app > program_output.txt 2> runtime_error.txt || {
+            echo "Napaka: Program se ni pravilno zagnal." >> napaka.txt
+            cat runtime_error.txt >> napaka.txt
+            exit 1
+          }
+
+      # Preverimo, da program res nekaj izpiše.
+      - name: Check program output
+        if: matrix.test-file.name == 'main.cpp'
+        run: |
+          if [ ! -s program_output.txt ]; then
+            echo "Napaka: Program se je zagnal, vendar ni ustvaril izpisa." >> napaka.txt
+            exit 1
+          fi
+
+      # Datoteko napaka.txt shranimo kot artefakt.
+      # Uporabimo if: always(), da se artefakt shrani tudi ob neuspešnem testu.
+      - name: Upload napaka.txt artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: napaka-${{ matrix.test-file.name }}
+          path: napaka.txt
+
+  # Drugi job prenese artefakte iz prvega joba in preveri datoteke napaka.txt.
+  check-error-artifact:
+    # Ta job je odvisen od prvega joba.
+    needs: repository-tests
+
+    # Tudi ta job teče na self-hosted runnerju.
+    runs-on: self-hosted
+
+    # Zažene se vedno, da lahko preveri artefakte tudi ob morebitni napaki.
+    if: always()
+
+    steps:
+      # Prenese vse napaka.txt artefakte iz prvega joba.
+      - name: Download napaka.txt artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+
+      # Če je katerakoli napaka.txt datoteka neprazna, workflow pade.
+      - name: Check that napaka.txt files are empty
+        run: |
+          failed=0
+
+          for file in downloaded-artifacts/*/napaka.txt; do
+            echo "Preverjam: $file"
+
+            if [ -s "$file" ]; then
+              echo "V datoteki $file so zapisane napake:"
+              cat "$file"
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
